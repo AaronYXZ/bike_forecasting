@@ -27,6 +27,7 @@ def query_station(url) -> pd.DataFrame:
     info_df = pd.json_normalize(info["data"]["stations"])
     status_df = pd.json_normalize(status["data"]["stations"])
     df = pd.merge(info_df, status_df, on="station_id")
+    df['total_num_bikes_available'] = df['num_bikes_available'] + df['num_ebikes_available']  # Extract mechanical bike count
     return df  # Return the merged DataFrame
 
 # Function to determine marker color based on the number of bikes available
@@ -56,7 +57,7 @@ def get_bike_availability(latlon, df, input_bike_modes):
         while i < len(df):
             df.loc[i, 'distance'] = geodesic(latlon, (df['lat'][i], df['lon'][i])).km  # Calculate distance to each station
             i = i + 1
-        df = df.loc[(df['ebike'] > 0) | (df['mechanical'] > 0)]  # Remove stations with no available bikes
+        df = df.loc[(df['num_bikes_available'] > 0) | (df['num_ebikes_available'] > 0)]  # Remove stations with no available bikes
         chosen_station = []
         chosen_station.append(df[df['distance'] == min(df['distance'])]['station_id'].iloc[0])  # Get closest station
         chosen_station.append(df[df['distance'] == min(df['distance'])]['lat'].iloc[0])
