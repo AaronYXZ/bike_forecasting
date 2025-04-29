@@ -2,40 +2,37 @@ import streamlit as st  # Import Streamlit for creating web apps
 import pandas as pd  # Import pandas for data manipulation
 import datetime as dt  # Import datetime for handling date and time
 from bike_utils import get_dock_availability, get_marker_color, query_station_status, get_bike_availability, get_station_latlon, join_latlon, run_osrm , geocode  # Import custom utils functions
-# from bike_utils import query_station_status
+from helper import query_station
 import folium  # Import folium for creating interactive maps
 from streamlit_folium import folium_static  # Import folium_static to render Folium maps in Streamlit
 
-# Example URL to fetch bike share data (replace with the actual URL from the resource_urls list)
-station_url = 'https://tor.publicbikesystem.net/ube/gbfs/v1/en/station_status.json'  
-latlon_url = "https://tor.publicbikesystem.net/ube/gbfs/v1/en/station_information"
 
 # Streamlit app setup
 st.title('Toronto Bike Share Station Status')  # Set the title of the app
 st.markdown('This dashboard tracks bike availability at each bike share station in Toronto.')  # Add a description
 
+gbfs_url = "https://gbfs.divvybikes.com/gbfs/gbfs.json"
+
 # Fetch data for initial visualization
-data_df = query_station_status(station_url)  # Get station status data
-latlon_df = get_station_latlon(latlon_url)  # Get station latitude and longitude data
-data = join_latlon(data_df, latlon_df)  # Join the status data with the location data
+data = query_station(gbfs_url)  # Join the status data with the location data
 
 # Display initial metrics
 col1, col2, col3 = st.columns(3)  # Create three columns for metrics
 with col1:
     st.metric(label="Bikes Available Now", value=sum(data['num_bikes_available']))  # Display total number of bikes available
-    st.metric(label="E-Bikes Available Now", value=sum(data["ebike"]))  # Display total number of e-bikes available
+    st.metric(label="E-Bikes Available Now", value=sum(data["num_ebikes_available"]))  # Display total number of e-bikes available
 with col2:
     st.metric(label="Stations w Available Bikes", value=len(data[data['num_bikes_available'] > 0]))  # Display number of stations with available bikes
-    st.metric(label="Stations w Available E-Bikes", value=len(data[data['ebike'] > 0]))  # Display number of stations with available e-bikes
+    st.metric(label="Stations w Available E-Bikes", value=len(data[data['num_ebikes_available'] > 0]))  # Display number of stations with available e-bikes
 with col3:
     st.metric(label="Stations w Empty Docks", value=len(data[data['num_docks_available'] > 0]))  # Display number of stations with empty docks
 
 # Track metrics for delta calculation
 deltas = [
     sum(data['num_bikes_available']),
-    sum(data["ebike"]),
+    sum(data["num_ebikes_available"]),
     len(data[data['num_bikes_available'] > 0]),
-    len(data[data['ebike'] > 0]),
+    len(data[data['num_ebikes_available'] > 0]),
     len(data[data['num_docks_available'] > 0])
 ]
 
@@ -53,8 +50,8 @@ with st.sidebar:
         input_bike_modes = st.multiselect("What kind of bikes are you looking to rent?", ["ebike", "mechanical"])  # Multi-select box for bike types
         st.subheader('Where are you located?')
         input_street = st.text_input("Street", "")  # Text input for street
-        input_city = st.text_input("City", "Toronto")  # Text input for city
-        input_country = st.text_input("Country", "Canada")  # Text input for country
+        input_city = st.text_input("City", "Chicago")  # Text input for city
+        input_country = st.text_input("Country", "U.S.A.")  # Text input for country
         drive = st.checkbox("I'm driving there.")  # Checkbox for driving option
         findmeabike = st.button("Find me a bike!", type="primary")  # Button to find a bike
         if findmeabike:
@@ -67,8 +64,8 @@ with st.sidebar:
     elif bike_method == "Return":
         st.subheader('Where are you located?')
         input_street_return = st.text_input("Street", "")  # Text input for street for return
-        input_city_return = st.text_input("City", "Toronto")  # Text input for city for return
-        input_country_return = st.text_input("Country", "Canada")  # Text input for country for return
+        input_city_return = st.text_input("City", "Chicage")  # Text input for city for return
+        input_country_return = st.text_input("Country", "US")  # Text input for country for return
         findmeadock = st.button("Find me a dock!", type="primary")  # Button to find a dock
         if findmeadock:
             if input_street_return != "":
@@ -80,7 +77,7 @@ with st.sidebar:
 
 # Initial map setup based on user selection
 if bike_method == "Return" and findmeadock == False:
-    center = [43.65306613746548, -79.38815311015]  # Coordinates for Toronto
+    center = [41.85003000, -87.65005000]  # Coordinates for Chicage
     m = folium.Map(location=center, zoom_start=13, tiles='cartodbpositron')  # Create a map with a grey background
     for _, row in data.iterrows():
         marker_color = get_marker_color(row['num_bikes_available'])  # Determine marker color based on bikes available
@@ -94,7 +91,7 @@ if bike_method == "Return" and findmeadock == False:
             popup=folium.Popup(f"Station ID: {row['station_id']}<br>"
                                f"Total Bikes Available: {row['num_bikes_available']}<br>"
                                f"Mechanical Bike Available: {row['mechanical']}<br>"
-                               f"eBike Available: {row['ebike']}", max_width=300)
+                               f"eBike Available: {row['num_ebikes_available']}", max_width=300)
         ).add_to(m)
     folium_static(m)  # Display the map in the Streamlit app
 

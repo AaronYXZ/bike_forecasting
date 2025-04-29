@@ -8,36 +8,25 @@ from geopy.geocoders import Nominatim  # Import Nominatim for geocoding
 import streamlit as st  # Import Streamlit for creating web apps
 
 @st.cache_data  # Cache the function's output to improve performance
-# Define the function to query station status from a given URL
-def query_station_status(url):
-    with urllib.request.urlopen(url) as data_url:  # Open the URL
-        data = json.loads(data_url.read().decode())  # Read and decode the JSON data
 
-    df = pd.DataFrame(data['data']['stations'])  # Convert the data to a DataFrame
-    df = df[df.is_renting == 1]  # Filter out stations that are not renting
-    df = df[df.is_returning == 1]  # Filter out stations that are not returning
-    df = df.drop_duplicates(['station_id', 'last_reported'])  # Remove duplicate records
-    df.last_reported = df.last_reported.map(lambda x: dt.datetime.utcfromtimestamp(x))  # Convert timestamps to datetime
-    df['time'] = data['last_updated']  # Add the last updated time to the DataFrame
-    df.time = df.time.map(lambda x: dt.datetime.utcfromtimestamp(x))  # Convert timestamps to datetime
-    df = df.set_index('time')  # Set the time as the index
-    df.index = df.index.tz_localize('UTC')  # Localize the index to UTC
-    df = pd.concat([df, df['num_bikes_available_types'].apply(pd.Series)], axis=1)  # Expand the bike types column
+# Define the function to query station status and latlon from a given URL
+def query_station(url) -> pd.DataFrame:
+    # Main feed URL
+    feeds = requests.get(url).json()
+    feed_dict = {feed["name"]: feed["url"] for feed in feeds["data"]["en"]["feeds"]}
 
-    return df  # Return the DataFrame
+    # Get URLs for station info and station status
+    station_info_url = feed_dict["station_information"]
+    station_status_url = feed_dict["station_status"]
 
-# Define the function to get station latitude and longitude from a given URL
-def get_station_latlon(url):
-    with urllib.request.urlopen(url) as data_url:  # Open the URL
-        latlon = json.loads(data_url.read().decode())  # Read and decode the JSON data
-    latlon = pd.DataFrame(latlon['data']['stations'])  # Convert the data to a DataFrame
-    return latlon  # Return the DataFrame
+    # Download both
+    info = requests.get(station_info_url).json()
+    status = requests.get(station_status_url).json()
 
-# Define the function to join two DataFrames on station_id
-def join_latlon(df1, df2):
-    df = df1.merge(df2[['station_id', 'lat', 'lon']], 
-                how='left', 
-                on='station_id')  # Merge the DataFrames on station_id
+    # Normalize and merge
+    info_df = pd.json_normalize(info["data"]["stations"])
+    status_df = pd.json_normalize(status["data"]["stations"])
+    df = pd.merge(info_df, status_df, on="station_id")
     return df  # Return the merged DataFrame
 
 # Function to determine marker color based on the number of bikes available
